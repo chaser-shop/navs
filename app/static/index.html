@@ -25,9 +25,10 @@ const api=async(u,m='GET',b)=>{const r=await fetch('/api/'+u,{method:m,headers:{
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const KIND={info:'Інфо',letter:'Літера',video_in:'Отримано відео',video_reply:'Відповідь на відео',worker:'Помилка роботи'};
 const rows=h=>h.map(x=>`<tr><td>${x.ts}<td>${esc(x.contact)}<td>${KIND[x.kind]||x.kind}: ${esc(x.detail)}<td class="${x.status=='ok'?'':'err'}">${esc(x.status)}</tr>`).join('')||'<tr><td colspan=4>Подій ще немає</tr>';
+const prof=p=>p?`<div style="display:flex;gap:8px;align-items:center;margin:4px 0">${p.avatar?`<img src="${esc(p.avatar)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover">`:''}<b>${p.user?'@'+esc(p.user):'Профіль'}</b></div>`:'';
 const HEAD='<tr><th>Час<th>Контакт<th>Дія<th>Статус</tr>';
 function login(){$('#app').innerHTML=`<main><h2>Вхід</h2><div class=row><input id=pw type=password placeholder="Пароль" autofocus autocomplete="current-password"><button class=b id=go>Увійти</button></div><label><input type=checkbox id=sp>Показати пароль</label></main>`;$('#sp').onchange=e=>{$('#pw').type=e.target.checked?'text':'password'};
- const go=async()=>{await api('login','POST',{password:$('#pw').value});shell()};$('#go').onclick=go;$('#pw').onkeydown=e=>e.key=='Enter'&&go()}
+ const go=async()=>{await api('login','POST',{password:$('#pw').value});shell()};$('#go').onclick=go;$('#pw').onkeydown=e=>{if(e.key=='Enter')go()}}
 function shell(){clearInterval(timer);const t={home:'Головна',contacts:'Контакти',auto:'Автоматизація',hist:'Історія',set:'Налаштування'};
  $('#app').innerHTML=`<nav>${Object.entries(t).map(([k,v])=>`<button data-t=${k} class="${k==tab?'on':''}">${v}</button>`).join('')}</nav><main id=m></main>`;
  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;shell()});({home,contacts,auto,hist,set})[tab]()}
@@ -40,7 +41,7 @@ async function home(){const s=await api('status');const A={ok:'Підключе�
  <div class=card><small>Автоматизація</small><b>${s.running?'працює':'вимкнена'}</b></div>
  <div class=card><small>Останнє виконання</small><b>${esc(s.last_run?new Date(s.last_run).toLocaleString('uk-UA'):'—')}</b></div>
  <div class=card><small>Контактів / вибрано</small><b>${s.contacts} / ${s.selected}</b></div><div class=card><small>Надіслано літер</small><b>${s.sent}</b></div>
- <div class=card><small>Акаунт</small><b>${A[s.auth]}</b></div></div>
+ <div class=card><small>Акаунт</small>${prof(s.profile)}<b>${A[s.auth]}</b></div></div>
  <h3>Що відбувається зараз</h3><div style="overflow-x:auto"><table id=feed></table></div>`;
  $('#t').onclick=async()=>{await api('running','POST',{on:!s.running});home()};
  $('#rf').onclick=async()=>{await api('refresh','POST');home()};
@@ -70,9 +71,9 @@ async function hist(k='all'){const h=await api('history?kind='+k+'&limit=200');
  $('#m').innerHTML=`<h2>Історія</h2><div class=row><select id=k><option value=all ${k=='all'?'selected':''}>Усі дії</option><option value=letter ${k=='letter'?'selected':''}>Автоповідомлення</option><option value=video ${k=='video'?'selected':''}>Відео та відповіді</option></select></div>
  <div style="overflow-x:auto"><table>${HEAD}${rows(h)}</table></div>`;$('#k').onchange=e=>hist(e.target.value)}
 async function set(){const s=await api('status');
- $('#m').innerHTML=`<h2>Налаштування</h2><p>Статус акаунта: <b>${s.auth}</b></p><p>Вставте JSON cookies tiktok.com (див. README, розділ 4):</p><textarea id=ck></textarea>
- <div class=row><button class=b id=sv>Підключити акаунт</button><button class="b red" id=del>Відключити акаунт</button><button class=b id=out>Вийти з панелі</button></div>`;
- $('#sv').onclick=async()=>{await api('cookies','POST',{cookies:$('#ck').value});alert('Збережено (зашифровано)');set()};
+ $('#m').innerHTML=`<h2>Налаштування</h2><p>Статус акаунта: <b>${s.auth}</b></p>${s.profile?`<div class=card style="margin-bottom:12px"><small>Підключено як</small>${prof(s.profile)}</div>`:''}<p>Вставте JSON cookies tiktok.com (див. README, розділ 4):</p><textarea id=ck></textarea>
+ <div class=row><button class=b id=ck2>Перевірити підключення</button><button class=b id=sv>Підключити акаунт</button><button class="b red" id=del>Відключити акаунт</button><button class=b id=out>Вийти з панелі</button></div><h3>Діагностика</h3><p>Показує, що бачив воркер при останній невдалій спробі.</p><button class=b id=dg>Показати, що бачив воркер</button><div id=dgo></div>`;
+ $('#dg').onclick=async()=>{const d=await api('debug');$('#dgo').innerHTML=d.info?`<p style="word-break:break-all">${esc(d.info.url)}<br>${esc(d.info.title)}</p><p style="word-break:break-all">data-e2e: ${esc((d.info.e2e||[]).join(', '))}</p>${d.shot?`<img src="data:image/jpeg;base64,${d.shot}" alt="" style="max-width:100%;border:1px solid var(--line)">`:''}`:'<p>Даних поки немає. Натисніть «Оновити контакти» і спробуйте ще раз.</p>'};$('#ck2').onclick=async()=>{await api('check','POST');alert('Перевірку запущено. Оновіть сторінку за хвилину.')};$('#sv').onclick=async()=>{await api('cookies','POST',{cookies:$('#ck').value});alert('Збережено (зашифровано)');set()};
  $('#del').onclick=async()=>{await api('cookies','DELETE');set()};$('#out').onclick=async()=>{await api('logout','POST');login()}}
 api('me').then(r=>r.ok?shell():login());
 </script></body></html>
