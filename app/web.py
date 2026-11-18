@@ -1,6 +1,6 @@
-import os, json, time, hmac, re
+import os, json, time, hmac, re, base64
 from zoneinfo import ZoneInfo
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, Response
 from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 from . import db, crypto
@@ -61,7 +61,7 @@ async def put_settings(r: Request):
 @app.get("/api/contacts", dependencies=D)
 def contacts(q: str = ""):
     with db.cur() as k:
-        k.execute("select name,streak,enabled from contacts where name ilike %s order by streak desc,name", (f"%{q}%",))
+        k.execute("select name,streak,enabled,(avatar is not null) as has_av from contacts where name ilike %s order by lower(name)", (f"%{q}%",))
         return k.fetchall()
 @app.post("/api/contacts/toggle", dependencies=D)
 async def toggle(r: Request):
@@ -116,3 +116,13 @@ def check(): db.put("cmd", "check"); return {"ok": True}
 @app.get("/api/debug", dependencies=D)
 def debug():
     i = db.get("debug_info"); return {"info": json.loads(i) if i else None, "shot": db.get("debug_shot")}
+
+@app.get("/api/avatar", dependencies=D)
+def avatar(name: str):
+    with db.cur() as k:
+        k.execute("select avatar from contacts where name=%s", (name,)); r = k.fetchone()
+    if not r or not r["avatar"]: raise HTTPException(404)
+    head, b64 = r["avatar"].split(",", 1)
+    return Response(base64.b64decode(b64), media_type=head[5:].split(";")[0],
+                    headers={"Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff",
+                             "Content-Security-Policy": "sandbox"})

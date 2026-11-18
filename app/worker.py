@@ -84,21 +84,69 @@ def is_video(p):  # у списку чатів: «Поділився(-лась) 
     if t.startswith(("ви ", "you ")): return False
     return ("поділи" in t and "відео" in t) or "shared a video" in t
 
-def scan(pg):  # вогник: лише за реальним елементом; текст 🔥 у повідомленні — це не серія
-    out = []
-    for it in items(pg):
-        name = item_info(it)[0]
-        if name: out.append((name, it.query_selector('[data-e2e*="streak"], [aria-label*="treak"], [aria-label*="огник"]') is not None))
-    return out
+
+SCROLL_JS = """([sel, mode]) => {
+  const it = document.querySelector(sel); if (!it) return -1;
+  let e = it.parentElement;
+  while (e && e.scrollHeight <= e.clientHeight + 2) e = e.parentElement;
+  if (!e) return -1;
+  const before = e.scrollTop;
+  e.scrollTop = mode === 'top' ? 0 : before + e.clientHeight * 0.8;
+  return Math.abs(e.scrollTop - before);
+}"""
+
+def scroll_list(pg, mode="down"):  # список чатів підвантажується під час прокрутки
+    r = -1
+    for sel in (SEL["item"], SEL["alt"]):
+        r = pg.evaluate(SCROLL_JS, [sel, mode])
+        if r != -1: break
+    pg.wait_for_timeout(1000); return r
+
+def scan(pg):  # прокручує весь список; повертає (нік, вогник, src аватарки)
+    scroll_list(pg, "top"); seen = {}; dups = set(); idle = 0
+    for _ in range(80):
+        new = 0; step = set()
+        for it in items(pg):
+            name = item_info(it)[0]
+            if not name: continue
+            if name in step: dups.add(name)
+            step.add(name)
+            if name not in seen:
+                img = it.query_selector('[data-e2e="dm-new-conversation-avatar"] img') or it.query_selector("img")
+                streak = it.query_selector('[data-e2e*="streak"], [aria-label*="treak"], [aria-label*="огник"]') is not None
+                seen[name] = (streak, img.get_attribute("src") if img else None); new += 1
+        idle = 0 if new else idle + 1
+        if idle >= 3: break
+        scroll_list(pg, "down")
+    scroll_list(pg, "top")
+    if dups: db.log("info", None, "Чати з однаковим іменем об'єднано в один контакт: " + ", ".join(sorted(dups))[:200], "error")
+    return [(n, v[0], v[1]) for n, v in seen.items()]
+
+def fetch_avatar(pg, src):
+    try:
+        if src.startswith("data:"): return src if len(src) < 60000 else None
+        r = pg.context.request.get(src); body = r.body()
+        if r.ok and len(body) < 60000:
+            return "data:" + r.headers.get("content-type", "image/jpeg") + ";base64," + base64.b64encode(body).decode()
+    except Exception: pass
+    return None
 
 
-def open_chat(pg, name):  # точний збіг ніку (раніше було «входить у текст» — помилково чіпало інші чати)
-    for it in items(pg):
-        if item_info(it)[0] == name:
-            it.click()
-            try: pg.wait_for_selector('[data-e2e="dm-new-chatbox"]', timeout=8000)
-            except Exception: pass
-            pg.wait_for_timeout(1000); return True
+def open_chat(pg, name):  # точний збіг ніку + прокрутка списку, якщо чат нижче
+    scroll_list(pg, "top"); seen = set(); idle = 0
+    for _ in range(80):
+        new = 0
+        for it in items(pg):
+            n = item_info(it)[0]
+            if n == name:
+                it.click()
+                try: pg.wait_for_selector('[data-e2e="dm-new-chatbox"]', timeout=8000)
+                except Exception: pass
+                pg.wait_for_timeout(1000); return True
+            if n not in seen: seen.add(n); new += 1
+        idle = 0 if new else idle + 1
+        if idle >= 3: break
+        scroll_list(pg, "down")
     return False
 
 def send(pg, text):
@@ -113,20 +161,24 @@ def chat_videos(pg):  # лише ВХІДНІ відео (повідомленн
         if mid and bb and bb["x"] + bb["width"] / 2 < 640: out.append(mid.group(1))
     return out
 
+
 def sync_contacts(pg):
     found = scan(pg)
     with db.cur() as k:
+        k.execute("select name from contacts where avatar is not null"); have = {r["name"] for r in k.fetchall()}
+    av = {n: fetch_avatar(pg, src) for n, _, src in found if src and n not in have}
+    with db.cur() as k:
         k.execute("update contacts set streak=false")
-        for n, s in found:
-            k.execute("insert into contacts(name,streak,enabled) values(%s,%s,false) on conflict(name) do update "
-                      "set streak=excluded.streak, seen_at=now()", (n, s))
-    db.log("info", None, f"Знайдено чатів: {len(found)}, з вогником: {sum(1 for _, s in found if s)}")
+        for n, s, _ in found:
+            k.execute("insert into contacts(name,streak,enabled,avatar) values(%s,%s,false,%s) on conflict(name) do update "
+                      "set streak=excluded.streak, seen_at=now(), avatar=coalesce(excluded.avatar, contacts.avatar)", (n, s, av.get(n)))
+    db.log("info", None, f"Знайдено чатів: {len(found)}, нових аватарок: {sum(1 for v in av.values() if v)}")
 
 def daily(pg, today):
     idx = int(db.get("alpha_idx")) % len(ALPHABET); letter = ALPHABET[idx]
     sync_contacts(pg)
     with db.cur() as k:
-        k.execute("select name from contacts where enabled and (streak or %s='0')", (db.get("streak_only"),))
+        k.execute("select name from contacts where enabled")
         names = [r["name"] for r in k.fetchall()]
     db.log("info", None, f"Літера «{letter}»: вибрано для надсилання {len(names)}")
     for n in names:
@@ -144,7 +196,7 @@ def videos(pg):
     emoji = db.get("emoji"); today = dt.datetime.now(ZoneInfo(db.get("tz"))).date().isoformat()
     with db.cur() as k:
         k.execute("select name from contacts where enabled"); on = {r["name"] for r in k.fetchall()}
-    todo = []
+    scroll_list(pg, "top"); todo = []
     for it in items(pg):
         name, preview, tm = item_info(it)
         if name not in on: continue

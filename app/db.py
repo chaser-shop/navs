@@ -6,6 +6,7 @@ SCHEMA = """
 create table if not exists settings(key text primary key, value text);
 create table if not exists contacts(name text primary key, streak bool default false,
   enabled bool default true, seen_at timestamptz default now());
+alter table contacts add column if not exists avatar text;
 create table if not exists log(id serial primary key, ts timestamptz default now(),
   kind text, contact text, detail text, status text);
 create table if not exists sent(day date, contact text, primary key(day, contact));
