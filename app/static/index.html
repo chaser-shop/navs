@@ -18,7 +18,7 @@ label{display:flex;gap:10px;align-items:center;margin:12px 0}table{width:100%;bo
 td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;font-size:.92rem}.err{color:var(--bad)}
 textarea{width:100%;height:120px;font:13px monospace;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px}
 :focus-visible{outline:3px solid var(--acc);outline-offset:2px}.row{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
-.av{display:inline-block;width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;background:var(--line)}.chip{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:3px 12px 3px 4px;background:var(--bg)}</style></head><body><div id="app"></div><script>
+.av{display:inline-block;width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;background:var(--line)}.nick{color:var(--ink);text-decoration:none}.nick:hover{color:var(--acc);text-decoration:underline}.chip{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:3px 12px 3px 4px;background:var(--bg)}</style></head><body><div id="app"></div><script>
 const $=s=>document.querySelector(s);let tab='home',timer;
 const api=async(u,m='GET',b)=>{const r=await fetch('/api/'+u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});
  if(r.status==401&&u!='login'){return login()} if(!r.ok){alert((await r.json()).detail||'Помилка');throw 0} return r.json()};
@@ -27,6 +27,7 @@ const KIND={info:'Інфо',letter:'Літера',video_in:'Отримано в�
 const rows=h=>h.map(x=>`<tr><td>${x.ts}<td>${esc(x.contact)}<td>${KIND[x.kind]||x.kind}: ${esc(x.detail)}<td class="${x.status=='ok'?'':'err'}">${esc(x.status)}</tr>`).join('')||'<tr><td colspan=4>Подій ще немає</tr>';
 const prof=p=>p?`<div style="display:flex;gap:8px;align-items:center;margin:4px 0">${p.avatar?`<img src="${esc(p.avatar)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover">`:''}<b>${p.user?'@'+esc(p.user):'Профіль'}</b></div>`:'';
 const av=x=>x.has_av?`<img class=av alt="" src="/api/avatar?name=${encodeURIComponent(x.name)}">`:`<span class=av></span>`;
+const prof_url=x=>x.username?`https://www.tiktok.com/@${encodeURIComponent(x.username)}`:`https://www.tiktok.com/search/user?q=${encodeURIComponent(x.name)}`;
 const HEAD='<tr><th>Час<th>Контакт<th>Дія<th>Статус</tr>';
 function login(){$('#app').innerHTML=`<main><h2>Вхід</h2><div class=row><input id=pw type=password placeholder="Пароль" autofocus autocomplete="current-password"><button class=b id=go>Увійти</button></div><label><input type=checkbox id=sp>Показати пароль</label></main>`;$('#sp').onchange=e=>{$('#pw').type=e.target.checked?'text':'password'};
  const go=async()=>{await api('login','POST',{password:$('#pw').value});shell()};$('#go').onclick=go;$('#pw').onkeydown=e=>{if(e.key=='Enter')go()}}
@@ -53,7 +54,7 @@ async function contacts(q=''){const c=await api('contacts?q='+encodeURIComponent
  <div class=row><button class=b id=rf>Оновити список із TikTok</button><button class=b id=all>Вибрати всіх</button><button class=b id=none>Зняти всіх</button></div>
  <div class=row><input id=nn placeholder="Додати вручну (нік як у чаті)"><button class=b id=add>Додати</button></div>
  <input id=q placeholder="Пошук" value="${esc(q)}"><p>Вибрано: <b>${c.filter(x=>x.enabled).length}</b> із ${c.length}</p>
- <table><tr><th>Користувач<th>Діалог</tr>${c.map((x,i)=>`<tr><td>${av(x)}${esc(x.name)}<td><input type=checkbox data-i=${i} ${x.enabled?'checked':''}></tr>`).join('')||'<tr><td colspan=2>Список порожній. Натисніть «Оновити список із TikTok» і зачекайте хвилину (хід видно на Головній).'}</table>`;
+ <table><tr><th>Користувач<th>Діалог</tr>${c.map((x,i)=>`<tr><td>${av(x)}<a class=nick href="${prof_url(x)}" target=_blank rel="noopener noreferrer" title="${x.username?'Відкрити профіль у TikTok':'Знайти в TikTok'}">${esc(x.name)}</a><td><input type=checkbox data-i=${i} ${x.enabled?'checked':''}></tr>`).join('')||'<tr><td colspan=2>Список порожній. Натисніть «Оновити список із TikTok» і зачекайте хвилину (хід видно на Головній).'}</table>`;
  const bulk=async(e,s)=>{await api('contacts/bulk','POST',{enabled:e,streak_only:s})};
  $('#rf').onclick=async()=>{await api('refresh','POST');alert('Команду надіслано. Оновіть сторінку приблизно за хвилину.')};
  $('#all').onclick=async()=>{await bulk(true,false);contacts(q)};$('#none').onclick=async()=>{await bulk(false,false);contacts(q)};

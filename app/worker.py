@@ -108,17 +108,31 @@ def scroll_list(pg, mode="down"):  # як користувач: колесо м�
     pg.wait_for_timeout(1200)
 
 
-def shot_avatar(it):  # знімок самого елемента аватарки (не залежить від CDN-посилань)
+def item_user(it):  # @username зі посилання на профіль у рядку чату (якщо TikTok його там віддає)
+    try:
+        h = it.evaluate("e => { const a = e.querySelector('a[href*=\"/@\"]') || e.closest('a[href*=\"/@\"]'); return a ? a.getAttribute('href') : null }")
+        m = re.search(r"/@([A-Za-z0-9._]{1,40})", h or "")
+        return m.group(1) if m else None
+    except Exception: return None
+
+WAIT_IMG_JS = """i => (i.complete && i.naturalWidth > 0) ? true : new Promise(r => {
+  i.addEventListener('load', () => r(true), {once: true}); i.addEventListener('error', () => r(false), {once: true});
+  setTimeout(() => r(i.complete && i.naturalWidth > 0), 2500); })"""
+
+def shot_avatar(it):  # знімок самого елемента аватарки (не залежить від CDN-посилань); чекає, поки картинка завантажиться
     try:
         el = it.query_selector('[data-e2e="dm-new-conversation-avatar"]') or it.query_selector("img")
         if not el: return None
         img = el if el.evaluate("e => e.tagName") == "IMG" else el.query_selector("img")
-        if img and not img.evaluate("i => i.complete && i.naturalWidth > 0"): return None
+        if img:
+            try: img.scroll_into_view_if_needed(timeout=1500)
+            except Exception: pass
+            if not img.evaluate(WAIT_IMG_JS): return None
         return "data:image/jpeg;base64," + base64.b64encode(el.screenshot(type="jpeg", quality=70, timeout=3000)).decode()
     except Exception: return None
 
 def scan(pg, have=()):  # прокручує весь список; повертає (нік, вогник, аватарка data-URI)
-    scroll_list(pg, "top"); seen = {}; dups = set(); idle = 0
+    scroll_list(pg, "top"); seen = {}; dups = set(); idle = 0; tries = {}
     for _ in range(100):
         new = 0; step = set()
         for it in items(pg):
@@ -128,13 +142,16 @@ def scan(pg, have=()):  # прокручує весь список; поверт
             step.add(name)
             if name not in seen:
                 streak = it.query_selector('[data-e2e*="streak"], [aria-label*="treak"], [aria-label*="огник"]') is not None
-                seen[name] = (streak, None if name in have else shot_avatar(it)); new += 1
+                seen[name] = (streak, None if name in have else shot_avatar(it), item_user(it)); new += 1
+            elif seen[name][1] is None and name not in have and tries.get(name, 0) < 2:  # аватарка не встигла — ще спроба
+                tries[name] = tries.get(name, 0) + 1; a = shot_avatar(it)
+                if a: seen[name] = (seen[name][0], a, seen[name][2])
         idle = 0 if new else idle + 1
         if idle >= 4: break
         scroll_list(pg, "down")
     scroll_list(pg, "top")
     if dups: db.log("info", None, "Чати з однаковим іменем об'єднано в один контакт: " + ", ".join(sorted(dups))[:200], "error")
-    return [(n, v[0], v[1]) for n, v in seen.items()]
+    return [(n, v[0], v[1], v[2]) for n, v in seen.items()]
 
 
 
@@ -175,10 +192,11 @@ def sync_contacts(pg):
     found = scan(pg, have)
     with db.cur() as k:
         k.execute("update contacts set streak=false")
-        for n, s, a in found:
-            k.execute("insert into contacts(name,streak,enabled,avatar) values(%s,%s,false,%s) on conflict(name) do update "
-                      "set streak=excluded.streak, seen_at=now(), avatar=coalesce(excluded.avatar, contacts.avatar)", (n, s, a))
-    db.log("info", None, f"Знайдено чатів: {len(found)}, нових аватарок: {sum(1 for _, _, a in found if a)}")
+        for n, s, a, u in found:
+            k.execute("insert into contacts(name,streak,enabled,avatar,username) values(%s,%s,false,%s,%s) on conflict(name) do update "
+                      "set streak=excluded.streak, seen_at=now(), avatar=coalesce(excluded.avatar, contacts.avatar), "
+                      "username=coalesce(excluded.username, contacts.username)", (n, s, a, u))
+    db.log("info", None, f"Знайдено чатів: {len(found)}, нових аватарок: {sum(1 for f in found if f[2])}, посилань на профіль: {sum(1 for f in found if f[3])}")
 
 def daily(pg, today):
     idx = int(db.get("alpha_idx")) % len(ALPHABET); letter = ALPHABET[idx]

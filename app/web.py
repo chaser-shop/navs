@@ -61,7 +61,7 @@ async def put_settings(r: Request):
 @app.get("/api/contacts", dependencies=D)
 def contacts(q: str = ""):
     with db.cur() as k:
-        k.execute("select name,streak,enabled,(avatar is not null) as has_av from contacts where name ilike %s order by lower(name)", (f"%{q}%",))
+        k.execute("select name,username,streak,enabled,(avatar is not null) as has_av from contacts where name ilike %s order by lower(name)", (f"%{q}%",))
         return k.fetchall()
 @app.post("/api/contacts/toggle", dependencies=D)
 async def toggle(r: Request):
