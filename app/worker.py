@@ -67,7 +67,10 @@ def open_page(p):
 
 def parse_item(text, nick=None):
     lines = [l.strip() for l in text.split("\n") if l.strip()]
-    name = (nick or (lines[0] if lines else "")).strip()
+    if nick: name = nick.strip()
+    else:
+        first = lines[0] if lines else ""
+        name = re.sub(r"\d{1,2}[.:]\d{1,2}([.]\d{2,4})?\d*$", "", first).strip() or first
     preview = lines[1] if len(lines) > 1 else ""
     tm = next((l for l in lines[2:] if re.fullmatch(r"\d{1,2}[:.]\d{1,2}([.]\d{2,4})?", l)), "")
     return name, preview, tm
@@ -88,23 +91,35 @@ def is_video(p):  # у списку чатів: «Поділився(-лась) 
 SCROLL_JS = """([sel, mode]) => {
   const it = document.querySelector(sel); if (!it) return -1;
   let e = it.parentElement;
-  while (e && e.scrollHeight <= e.clientHeight + 2) e = e.parentElement;
+  while (e && !(/(auto|scroll|overlay)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 2)) e = e.parentElement;
   if (!e) return -1;
   const before = e.scrollTop;
   e.scrollTop = mode === 'top' ? 0 : before + e.clientHeight * 0.8;
   return Math.abs(e.scrollTop - before);
 }"""
 
-def scroll_list(pg, mode="down"):  # список чатів підвантажується під час прокрутки
-    r = -1
-    for sel in (SEL["item"], SEL["alt"]):
-        r = pg.evaluate(SCROLL_JS, [sel, mode])
-        if r != -1: break
-    pg.wait_for_timeout(1000); return r
 
-def scan(pg):  # прокручує весь список; повертає (нік, вогник, src аватарки)
+def scroll_list(pg, mode="down"):  # як користувач: колесо миші над списком (viewport 1280x900, список зліва)
+    if mode == "top":
+        for sel in (SEL["item"], SEL["alt"]):
+            if pg.evaluate(SCROLL_JS, [sel, "top"]) != -1: break
+    pg.mouse.move(230, 450)
+    pg.mouse.wheel(0, -100000 if mode == "top" else 500)
+    pg.wait_for_timeout(1200)
+
+
+def shot_avatar(it):  # знімок самого елемента аватарки (не залежить від CDN-посилань)
+    try:
+        el = it.query_selector('[data-e2e="dm-new-conversation-avatar"]') or it.query_selector("img")
+        if not el: return None
+        img = el if el.evaluate("e => e.tagName") == "IMG" else el.query_selector("img")
+        if img and not img.evaluate("i => i.complete && i.naturalWidth > 0"): return None
+        return "data:image/jpeg;base64," + base64.b64encode(el.screenshot(type="jpeg", quality=70, timeout=3000)).decode()
+    except Exception: return None
+
+def scan(pg, have=()):  # прокручує весь список; повертає (нік, вогник, аватарка data-URI)
     scroll_list(pg, "top"); seen = {}; dups = set(); idle = 0
-    for _ in range(80):
+    for _ in range(100):
         new = 0; step = set()
         for it in items(pg):
             name = item_info(it)[0]
@@ -112,24 +127,15 @@ def scan(pg):  # прокручує весь список; повертає (н�
             if name in step: dups.add(name)
             step.add(name)
             if name not in seen:
-                img = it.query_selector('[data-e2e="dm-new-conversation-avatar"] img') or it.query_selector("img")
                 streak = it.query_selector('[data-e2e*="streak"], [aria-label*="treak"], [aria-label*="огник"]') is not None
-                seen[name] = (streak, img.get_attribute("src") if img else None); new += 1
+                seen[name] = (streak, None if name in have else shot_avatar(it)); new += 1
         idle = 0 if new else idle + 1
-        if idle >= 3: break
+        if idle >= 4: break
         scroll_list(pg, "down")
     scroll_list(pg, "top")
     if dups: db.log("info", None, "Чати з однаковим іменем об'єднано в один контакт: " + ", ".join(sorted(dups))[:200], "error")
     return [(n, v[0], v[1]) for n, v in seen.items()]
 
-def fetch_avatar(pg, src):
-    try:
-        if src.startswith("data:"): return src if len(src) < 60000 else None
-        r = pg.context.request.get(src); body = r.body()
-        if r.ok and len(body) < 60000:
-            return "data:" + r.headers.get("content-type", "image/jpeg") + ";base64," + base64.b64encode(body).decode()
-    except Exception: pass
-    return None
 
 
 def open_chat(pg, name):  # точний збіг ніку + прокрутка списку, якщо чат нижче
@@ -162,17 +168,17 @@ def chat_videos(pg):  # лише ВХІДНІ відео (повідомленн
     return out
 
 
+
 def sync_contacts(pg):
-    found = scan(pg)
     with db.cur() as k:
         k.execute("select name from contacts where avatar is not null"); have = {r["name"] for r in k.fetchall()}
-    av = {n: fetch_avatar(pg, src) for n, _, src in found if src and n not in have}
+    found = scan(pg, have)
     with db.cur() as k:
         k.execute("update contacts set streak=false")
-        for n, s, _ in found:
+        for n, s, a in found:
             k.execute("insert into contacts(name,streak,enabled,avatar) values(%s,%s,false,%s) on conflict(name) do update "
-                      "set streak=excluded.streak, seen_at=now(), avatar=coalesce(excluded.avatar, contacts.avatar)", (n, s, av.get(n)))
-    db.log("info", None, f"Знайдено чатів: {len(found)}, нових аватарок: {sum(1 for v in av.values() if v)}")
+                      "set streak=excluded.streak, seen_at=now(), avatar=coalesce(excluded.avatar, contacts.avatar)", (n, s, a))
+    db.log("info", None, f"Знайдено чатів: {len(found)}, нових аватарок: {sum(1 for _, _, a in found if a)}")
 
 def daily(pg, today):
     idx = int(db.get("alpha_idx")) % len(ALPHABET); letter = ALPHABET[idx]
