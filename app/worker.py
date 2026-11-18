@@ -8,17 +8,18 @@ from . import db, crypto
 ALPHABET = list("АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯ")  # 33
 CATCHUP_HOURS = 6      # пропущене завдання старше цього — не виконується
 VIDEO_EVERY = 180      # сек між перевірками відео
-SEL = dict(item='[data-e2e="chat-list-item"]', name='[data-e2e="chat-nickname"]',
-           msg='[data-e2e="chat-item"]', alt='[class*="ConversationItem"]',
-           input='[data-e2e="message-input-area"] [contenteditable="true"], div[contenteditable="true"]')
+SEL = dict(item='[data-e2e="dm-new-conversation-item"]', name='[data-e2e="dm-new-conversation-nickname"]',
+           msg='[data-e2e="chat-item"]', alt='[data-e2e*="conversation-item"]',
+           input='[data-e2e="dm-new-chatbox"] [contenteditable="true"], [data-e2e="message-input-area"] [contenteditable="true"], div[contenteditable="true"]')
 _last_video = 0
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 def grab_profile(pg):
     try:
         info = pg.evaluate("""() => {
-          const a = document.querySelector('a[data-e2e="nav-profile"]');
-          const img = document.querySelector('[data-e2e="profile-icon"] img') || (a && a.querySelector('img'));
+          const el = document.querySelector('[data-e2e="nav-profile"]');
+          const a = el && (el.closest('a') || el.querySelector('a') || el);
+          const img = document.querySelector('[data-e2e="profile-icon"] img') || (el && el.querySelector('img'));
           const u = a && (a.getAttribute('href') || '').split('@')[1];
           return {user: u ? u.split('/')[0].split('?')[0] : null, avatar: img ? img.src : null};
         }""")
@@ -93,7 +94,11 @@ def scan(pg):  # вогник: лише за реальним елементом
 
 def open_chat(pg, name):  # точний збіг ніку (раніше було «входить у текст» — помилково чіпало інші чати)
     for it in items(pg):
-        if item_info(it)[0] == name: it.click(); pg.wait_for_timeout(1500); return True
+        if item_info(it)[0] == name:
+            it.click()
+            try: pg.wait_for_selector('[data-e2e="dm-new-chatbox"]', timeout=8000)
+            except Exception: pass
+            pg.wait_for_timeout(1000); return True
     return False
 
 def send(pg, text):
@@ -131,7 +136,7 @@ def daily(pg, today):
         try:
             if not open_chat(pg, n): raise RuntimeError("чат не знайдено")
             send(pg, letter); db.log("letter", n, letter)
-        except Exception as e: db.log("letter", n, letter, "error: " + str(e)[:200])
+        except Exception as e: db.log("letter", n, letter, "error: " + str(e)[:200]); diag(pg)
     db.put("alpha_idx", (idx + 1) % len(ALPHABET))
 
 
@@ -153,7 +158,7 @@ def videos(pg):
         try:
             if not open_chat(pg, name): raise RuntimeError("чат не знайдено")
             send(pg, emoji); db.log("video_reply", name, emoji)
-        except Exception as e: db.log("video_reply", name, emoji, "error: " + str(e)[:200])
+        except Exception as e: db.log("video_reply", name, emoji, "error: " + str(e)[:200]); diag(pg)
     if todo: db.log("info", None, f"Нових відео: {len(todo)}")
 
 def tick():
