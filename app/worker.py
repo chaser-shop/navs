@@ -131,8 +131,40 @@ def shot_avatar(it):  # знімок самого елемента аватар�
         return "data:image/jpeg;base64," + base64.b64encode(el.screenshot(type="jpeg", quality=70, timeout=3000)).decode()
     except Exception: return None
 
-def scan(pg, have=()):  # прокручує весь список; повертає (нік, вогник, аватарка data-URI)
-    scroll_list(pg, "top"); seen = {}; dups = set(); idle = 0; tries = {}
+HEADER_USER_JS = r"""() => { const out = [];
+  for (const a of document.querySelectorAll('a[href*="/@"]')) {
+    const r = a.getBoundingClientRect(); if (!r.width || !r.height || r.x < 330 || r.y > 170) continue;
+    const m = (a.getAttribute('href') || '').match(/\/@([A-Za-z0-9._]{1,40})\/?(?:[?#].*)?$/); if (m) out.push(m[1]); }
+  return out; }"""
+LINKS_JS = r"""() => [...document.querySelectorAll('a[href*="@"]')].slice(0, 15).map(a => { const r = a.getBoundingClientRect();
+  return (a.getAttribute('href') || '').slice(0, 60) + ' @' + Math.round(r.x) + ',' + Math.round(r.y); })"""
+
+def own_user():
+    try: return (json.loads(db.get("profile") or "{}").get("user") or "").lower()
+    except Exception: return ""
+
+def header_user(pg, skip=()):  # @username співрозмовника з посилання в шапці відкритого чату (не свій і не попередній)
+    me = own_user()
+    try:
+        for u in pg.evaluate(HEADER_USER_JS):
+            if u.lower() != me and u not in skip: return u
+    except Exception: pass
+    return None
+
+def user_via_chat(pg, it, prev):  # клік по чату → читаємо профіль із шапки (чат стає прочитаним)
+    try:
+        it.click()
+        try: pg.wait_for_selector('[data-e2e="dm-new-chatbox"]', timeout=6000)
+        except Exception: pass
+        for _ in range(10):  # шапка оновлюється не миттєво: чекаємо, поки з'явиться інший нік, ніж у попереднього чату
+            u = header_user(pg, skip={prev} if prev else ())
+            if u: return u
+            pg.wait_for_timeout(300)
+    except Exception: pass
+    return None
+
+def scan(pg, have=(), have_users=None):  # прокручує весь список; повертає (нік, вогник, аватарка, @username); have_users=None — не шукати @username
+    scroll_list(pg, "top"); seen = {}; dups = set(); idle = 0; tries = {}; prev = None; got = fail = 0; dumped = False
     for _ in range(100):
         new = 0; step = set()
         for it in items(pg):
@@ -142,7 +174,17 @@ def scan(pg, have=()):  # прокручує весь список; поверт
             step.add(name)
             if name not in seen:
                 streak = it.query_selector('[data-e2e*="streak"], [aria-label*="treak"], [aria-label*="огник"]') is not None
-                seen[name] = (streak, None if name in have else shot_avatar(it), item_user(it)); new += 1
+                av = None if name in have else shot_avatar(it); user = item_user(it)
+                if not user and have_users is not None and name not in have_users:
+                    user = user_via_chat(pg, it, prev)
+                    if user: prev = user; got += 1
+                    else:
+                        fail += 1
+                        if not dumped:
+                            dumped = True
+                            try: db.log("info", None, "Посилання з @ на сторінці: " + " | ".join(pg.evaluate(LINKS_JS))[:600], "error")
+                            except Exception: pass
+                seen[name] = (streak, av, user); new += 1
             elif seen[name][1] is None and name not in have and tries.get(name, 0) < 2:  # аватарка не встигла — ще спроба
                 tries[name] = tries.get(name, 0) + 1; a = shot_avatar(it)
                 if a: seen[name] = (seen[name][0], a, seen[name][2])
@@ -150,6 +192,7 @@ def scan(pg, have=()):  # прокручує весь список; поверт
         if idle >= 4: break
         scroll_list(pg, "down")
     scroll_list(pg, "top")
+    if have_users is not None: db.log("info", None, f"Профілі з шапки чату: знайдено {got}, не знайдено {fail}", "ok" if got or not fail else "error")
     if dups: db.log("info", None, "Чати з однаковим іменем об'єднано в один контакт: " + ", ".join(sorted(dups))[:200], "error")
     return [(n, v[0], v[1], v[2]) for n, v in seen.items()]
 
@@ -186,10 +229,11 @@ def chat_videos(pg):  # лише ВХІДНІ відео (повідомленн
 
 
 
-def sync_contacts(pg):
+def sync_contacts(pg, users=True):
     with db.cur() as k:
         k.execute("select name from contacts where avatar is not null"); have = {r["name"] for r in k.fetchall()}
-    found = scan(pg, have)
+        k.execute("select name from contacts where username is not null"); have_users = {r["name"] for r in k.fetchall()}
+    found = scan(pg, have, have_users if users else None)
     with db.cur() as k:
         k.execute("update contacts set streak=false")
         for n, s, a, u in found:
@@ -200,7 +244,7 @@ def sync_contacts(pg):
 
 def daily(pg, today):
     idx = int(db.get("alpha_idx")) % len(ALPHABET); letter = ALPHABET[idx]
-    sync_contacts(pg)
+    sync_contacts(pg, users=False)
     with db.cur() as k:
         k.execute("select name from contacts where enabled")
         names = [r["name"] for r in k.fetchall()]
