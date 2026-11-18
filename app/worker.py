@@ -294,7 +294,7 @@ def tick():
         with db.cur() as k:
             k.execute("insert into settings values('last_day',%s) on conflict(key) do update set value=excluded.value "
                       "where settings.value<>excluded.value", (today,)); due = k.rowcount == 1
-    vid = db.get("video_on") == "1" and time.time() - _last_video > VIDEO_EVERY
+    vid = time.time() - _last_video > VIDEO_EVERY  # відповіді на відео — завжди (поки автоматизацію запущено)
     if not (due or vid): return
     try:
         with sync_playwright() as p:

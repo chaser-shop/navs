@@ -1,81 +1,229 @@
 <!doctype html><html lang="uk"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>TikTok Автопілот</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>TikTok Автопілот</title>
+<meta name="theme-color" content="#0b7d5c">
 <style>
-:root{--bg:#f3f6f4;--ink:#14231c;--mut:#5d7066;--line:#d5dfd9;--card:#fff;--acc:#0f7a5a;--bad:#b3261e}
-@media(prefers-color-scheme:dark){:root{--bg:#0f1a15;--ink:#e6efe9;--mut:#8da197;--line:#25382f;--card:#16251e;--acc:#3ccf9f;--bad:#ff8a80}}
-*{box-sizing:border-box}body{margin:0;font:16px/1.5 Georgia,'Times New Roman',serif;background:var(--bg);color:var(--ink)}
-nav{display:flex;gap:4px;overflow-x:auto;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--card);position:sticky;top:0}
-nav button{font:inherit;border:0;background:none;color:var(--mut);padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap}
-nav button.on{background:var(--acc);color:var(--bg);color:#fff}
-main{max-width:860px;margin:0 auto;padding:16px}h2{margin:.2em 0 .8em;font-size:1.5rem}
-.letter{font-size:6rem;line-height:1;color:var(--acc);font-weight:700}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
-.card small{color:var(--mut);display:block}.card b{font-size:1.2rem}
-input,select,button.b{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
-button.b{background:var(--acc);color:#fff;border:0;cursor:pointer}button.b.red{background:var(--bad)}
-label{display:flex;gap:10px;align-items:center;margin:12px 0}table{width:100%;border-collapse:collapse}
-td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;font-size:.92rem}.err{color:var(--bad)}
-textarea{width:100%;height:120px;font:13px monospace;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px}
-:focus-visible{outline:3px solid var(--acc);outline-offset:2px}.row{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
-.av{display:inline-block;width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;background:var(--line)}.nick{color:var(--ink);text-decoration:none}.nick:hover{color:var(--acc);text-decoration:underline}.chip{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;padding:3px 12px 3px 4px;background:var(--bg)}</style></head><body><div id="app"></div><script>
-const $=s=>document.querySelector(s);let tab='home',timer;
+:root{--bg:#e6f1ec;--ink:#0e1f18;--mut:#566b61;--acc:#0b7d5c;--acc-ink:#fff;--bad:#c0392b;--bad-ink:#fff;--line:rgba(14,31,24,.12);--track:rgba(86,107,97,.35);
+--card:rgba(255,255,255,.62);--glass:rgba(255,255,255,.55);--glass-line:rgba(255,255,255,.8);--shadow:0 12px 34px rgba(14,60,44,.16);--blob:.55;
+--r:20px;--spring:cubic-bezier(.34,1.56,.64,1);--out:cubic-bezier(.2,.8,.2,1)}
+@media(prefers-color-scheme:dark){:root{--bg:#07110d;--ink:#e7f3ed;--mut:#8ba397;--acc:#3ccf9f;--acc-ink:#04261b;--bad:#ff8a80;--bad-ink:#3a0a06;--line:rgba(255,255,255,.1);--track:rgba(139,163,151,.35);
+--card:rgba(24,40,33,.55);--glass:rgba(24,40,33,.5);--glass-line:rgba(255,255,255,.16);--shadow:0 14px 40px rgba(0,0,0,.5);--blob:.3}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-padding-top:90px}
+body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);background:var(--bg);min-height:100vh}
+.aurora{position:fixed;inset:0;z-index:-1;overflow:hidden;background:var(--bg)}
+.aurora i{position:absolute;width:62vmax;height:62vmax;border-radius:50%;filter:blur(80px);opacity:var(--blob);will-change:transform;animation:drift 24s ease-in-out infinite alternate}
+.aurora i:nth-child(1){background:#34d399;left:-22vmax;top:-22vmax}
+.aurora i:nth-child(2){background:#38bdf8;right:-28vmax;top:8vh;animation-duration:30s;animation-delay:-9s}
+.aurora i:nth-child(3){background:#a3e635;left:8vw;bottom:-38vmax;opacity:calc(var(--blob) * .65);animation-duration:36s;animation-delay:-16s}
+@keyframes drift{to{transform:translate3d(9vmax,6vmax,0) scale(1.18)}}
+
+main{max-width:760px;margin:0 auto;padding:22px 16px calc(120px + env(safe-area-inset-bottom))}
+h2{margin:.1em 0 .7em;font-size:1.7rem;letter-spacing:-.02em;line-height:1.2}h3{margin:1.4em 0 .6em;font-size:1.05rem}
+p{margin:.4em 0 .9em;color:var(--mut)}small{color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--glass-line);border-radius:var(--r);padding:16px;box-shadow:0 6px 22px rgba(14,60,44,.08);backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%)}
+.card small{display:block}.card b{font-size:1.15rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
+
+/* кнопки */
+button{font:inherit}
+.b{border:0;border-radius:999px;padding:11px 18px;background:var(--acc);color:var(--acc-ink);font-weight:650;cursor:pointer;box-shadow:0 6px 16px color-mix(in srgb,var(--acc) 35%,transparent);transition:transform .25s var(--spring),box-shadow .25s,filter .2s}
+.b:hover{filter:brightness(1.06);transform:translateY(-1px)}.b:active{transform:scale(.95)}
+.b.ghost{background:var(--glass);color:var(--ink);border:1px solid var(--glass-line);box-shadow:none;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.b.red{background:var(--bad);color:var(--bad-ink);box-shadow:0 6px 16px color-mix(in srgb,var(--bad) 35%,transparent)}
+.b.big{padding:15px 26px;font-size:1.05rem}
+input:not([type=checkbox]),select,textarea{font:inherit;color:var(--ink);padding:11px 14px;border:1px solid var(--line);border-radius:14px;background:var(--card);transition:border-color .2s,box-shadow .2s}
+input:not([type=checkbox]):focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 4px color-mix(in srgb,var(--acc) 22%,transparent)}
+textarea{width:100%;height:120px;font:13px ui-monospace,Menlo,monospace}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+
+/* перемикач */
+.sw{position:relative;display:inline-block;width:52px;height:32px;flex:none}
+.sw input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer;z-index:1}
+.sw>span{position:absolute;inset:0;border-radius:999px;background:var(--track);transition:background .3s}
+.sw>span::after{content:"";position:absolute;left:3px;top:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.28);transition:transform .4s var(--spring)}
+.sw input:checked+span{background:var(--acc)}.sw input:checked+span::after{transform:translateX(20px)}
+.sw input:focus-visible+span{outline:3px solid var(--acc);outline-offset:2px}
+.line{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 2px;cursor:pointer}
+
+/* аватарки, ніки */
+.av{width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none;background:var(--line);display:inline-block}
+.av.ph{display:grid;place-items:center;font-weight:700;color:#fff;background:linear-gradient(135deg,hsl(var(--h) 68% 52%),hsl(calc(var(--h) + 40) 68% 40%))}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:999px;padding:4px 14px 4px 4px;background:var(--card);animation:pop .5s var(--spring) both}
+.chip .av{width:28px;height:28px;font-size:13px}
+.nick{color:var(--ink);font-weight:650;text-decoration:none;background:linear-gradient(var(--acc),var(--acc)) 0 100%/0 2px no-repeat;transition:background-size .3s var(--out),color .2s;word-break:break-word}
+.nick::after{content:" ↗";font-size:.75em;color:var(--mut);opacity:0;transition:opacity .2s}
+.nick:hover,.nick:focus-visible{background-size:100% 2px;color:var(--acc)}.nick:hover::after,.nick:focus-visible::after{opacity:1}
+
+/* контакти */
+.search{position:sticky;top:max(10px,env(safe-area-inset-top));z-index:6;display:flex;align-items:center;gap:10px;padding:4px 16px;border-radius:18px;background:var(--glass);border:1px solid var(--glass-line);box-shadow:var(--shadow);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%)}
+.search svg{width:20px;height:20px;flex:none;fill:none;stroke:var(--mut);stroke-width:2;stroke-linecap:round}
+.search input{flex:1;min-width:0;border:0!important;background:none!important;box-shadow:none!important;padding:11px 0}
+.count{margin:14px 4px 10px}.count b{color:var(--ink)}
+.crow{display:flex;align-items:center;gap:12px;padding:10px 14px 10px 10px;margin-bottom:8px;border-radius:18px;background:var(--card);border:1px solid var(--line);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+animation:rise .55s var(--out) both;animation-delay:calc(var(--i,0) * 30ms);transition:transform .3s var(--out),background .3s,border-color .3s}
+.clist.still .crow{animation:none}
+.crow:hover{transform:translateY(-2px)}
+.crow.on{border-color:var(--acc);border-color:color-mix(in srgb,var(--acc) 60%,transparent);background:color-mix(in srgb,var(--acc) 11%,var(--card))}
+.cb{flex:1;min-width:0}.cb small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.empty{padding:26px 10px;text-align:center;color:var(--mut)}
+
+/* головна */
+.hero{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;padding:20px 22px;overflow:hidden;position:relative}
+.hero::before{content:"";position:absolute;width:260px;height:260px;left:-60px;top:-90px;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--acc) 35%,transparent),transparent);animation:breathe 5s ease-in-out infinite}
+.hero>*{position:relative}
+.letter{font-size:6.2rem;line-height:1;color:var(--acc);font-weight:800;letter-spacing:-.04em;animation:pop .8s var(--spring) both;text-shadow:0 8px 30px color-mix(in srgb,var(--acc) 40%,transparent)}
+.num{font-variant-numeric:tabular-nums}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:var(--bad);vertical-align:middle}
+.dot.on{background:#22c55e;animation:pulse 2s infinite}
+.sta{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.8rem;font-weight:600;background:color-mix(in srgb,#22c55e 18%,transparent);color:var(--ink)}
+.sta.err{background:color-mix(in srgb,var(--bad) 20%,transparent);color:var(--bad)}
+table{width:100%;border-collapse:collapse}td,th{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:.9rem;vertical-align:top}th{color:var(--mut);font-weight:600;font-size:.8rem}
+tr:last-child td{border-bottom:0}.tw{overflow-x:auto;padding:6px 10px}
+
+/* скляний тулбар */
+.dock{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));z-index:30;display:flex;gap:2px;padding:6px;border-radius:28px;max-width:calc(100vw - 20px);
+background:var(--glass);border:1px solid var(--glass-line);box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(255,255,255,.08);
+backdrop-filter:blur(26px) saturate(190%);-webkit-backdrop-filter:blur(26px) saturate(190%);transform:translateX(-50%);animation:dockIn .8s var(--spring) .1s both}
+.dock button{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:58px;padding:9px 8px 7px;border:0;background:none;color:var(--mut);font-size:11px;font-weight:650;line-height:1.1;border-radius:22px;cursor:pointer;transition:color .3s}
+.dock button:active svg{transform:scale(.82)}
+.dock svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .4s var(--spring),stroke .3s}
+.dock button.on{color:var(--ink)}.dock button.on svg{stroke:var(--acc);transform:translateY(-2px) scale(1.12)}
+.pill{position:absolute;z-index:0;top:6px;bottom:6px;left:0;width:0;border-radius:22px;background:color-mix(in srgb,var(--acc) 16%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--acc) 35%,transparent);transition:transform .5s var(--spring),width .5s var(--spring)}
+.pill.init{transition:none}
+@supports not (backdrop-filter:blur(1px)){.dock,.search,.card{background:var(--bg)}}
+
+.toast{position:fixed;left:50%;bottom:calc(104px + env(safe-area-inset-bottom));z-index:40;max-width:calc(100vw - 32px);padding:12px 20px;border-radius:999px;background:var(--glass);border:1px solid var(--glass-line);box-shadow:var(--shadow);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);
+transform:translate(-50%,30px) scale(.9);opacity:0;pointer-events:none;transition:transform .45s var(--spring),opacity .3s}
+.toast.show{transform:translate(-50%,0) scale(1);opacity:1}.toast.bad{color:var(--bad)}
+
+/* скелетон */
+.sk{height:62px;border-radius:18px;margin-bottom:8px;background:linear-gradient(100deg,var(--card) 30%,color-mix(in srgb,var(--acc) 14%,var(--card)) 50%,var(--card) 70%) 0 0/300% 100%;animation:shimmer 1.3s linear infinite}
+
+/* вхід */
+.login{max-width:380px;margin:14vh auto 0;padding:26px}.login h2{margin-top:0}
+
+/* рух */
+#m.enter>*{animation:rise .6s var(--out) both}
+#m.enter>*:nth-child(2){animation-delay:.05s}#m.enter>*:nth-child(3){animation-delay:.1s}#m.enter>*:nth-child(4){animation-delay:.15s}#m.enter>*:nth-child(5){animation-delay:.2s}#m.enter>*:nth-child(n+6){animation-delay:.25s}
+@keyframes rise{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes pop{from{opacity:0;transform:scale(.5) rotate(-6deg)}to{opacity:1;transform:none}}
+@keyframes dockIn{from{opacity:0;transform:translate(-50%,140%)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%,100%{box-shadow:0 0 0 9px rgba(34,197,94,0)}}
+@keyframes breathe{50%{transform:scale(1.25);opacity:.7}}
+@keyframes shimmer{to{background-position:-300% 0}}
+@media(max-width:420px){.dock button{min-width:52px;padding:9px 5px 7px}.letter{font-size:5rem}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style></head><body><div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div><div id="app"></div><div class="toast" id="toast" role="status" aria-live="polite"></div><script>
+const $=s=>document.querySelector(s);let tab='home',timer,nav=0,entering=false,tt;
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg,bad){const t=$('#toast');t.textContent=msg;t.className='toast show'+(bad?' bad':'');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2600)}
 const api=async(u,m='GET',b)=>{const r=await fetch('/api/'+u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});
- if(r.status==401&&u!='login'){return login()} if(!r.ok){alert((await r.json()).detail||'Помилка');throw 0} return r.json()};
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+ if(r.status==401&&u!='login'){return login()} if(!r.ok){toast((await r.json().catch(()=>({}))).detail||'Помилка',true);throw 0} return r.json()};
+
+const I={home:'<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/>',users:'<circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><path d="M16 5.2a3 3 0 0 1 0 5.6M18 14.3c1.9.6 3.1 2.3 3.5 4.7"/>',
+ bolt:'<path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/>',clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+ gear:'<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>',
+ search:'<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/>'};
+const svg=k=>`<svg viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
+const TABS=[['home','Головна','home'],['contacts','Контакти','users'],['auto','Авто','bolt'],['hist','Історія','clock'],['set','Акаунт','gear']];
 const KIND={info:'Інфо',letter:'Літера',video_in:'Отримано відео',video_reply:'Відповідь на відео',worker:'Помилка роботи'};
-const rows=h=>h.map(x=>`<tr><td>${x.ts}<td>${esc(x.contact)}<td>${KIND[x.kind]||x.kind}: ${esc(x.detail)}<td class="${x.status=='ok'?'':'err'}">${esc(x.status)}</tr>`).join('')||'<tr><td colspan=4>Подій ще немає</tr>';
-const prof=p=>p?`<div style="display:flex;gap:8px;align-items:center;margin:4px 0">${p.avatar?`<img src="${esc(p.avatar)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover">`:''}<b>${p.user?'@'+esc(p.user):'Профіль'}</b></div>`:'';
-const av=x=>x.has_av?`<img class=av alt="" src="/api/avatar?name=${encodeURIComponent(x.name)}">`:`<span class=av></span>`;
-const prof_url=x=>x.username?`https://www.tiktok.com/@${encodeURIComponent(x.username)}`:`https://www.tiktok.com/search/user?q=${encodeURIComponent(x.name)}`;
+const rows=h=>h.map(x=>`<tr><td>${esc(x.ts)}<td>${esc(x.contact)}<td>${KIND[x.kind]||esc(x.kind)}: ${esc(x.detail)}<td><span class="sta ${x.status=='ok'?'':'err'}">${esc(x.status)}</span></tr>`).join('')||'<tr><td colspan=4>Подій ще немає</tr>';
 const HEAD='<tr><th>Час<th>Контакт<th>Дія<th>Статус</tr>';
-function login(){$('#app').innerHTML=`<main><h2>Вхід</h2><div class=row><input id=pw type=password placeholder="Пароль" autofocus autocomplete="current-password"><button class=b id=go>Увійти</button></div><label><input type=checkbox id=sp>Показати пароль</label></main>`;$('#sp').onchange=e=>{$('#pw').type=e.target.checked?'text':'password'};
- const go=async()=>{await api('login','POST',{password:$('#pw').value});shell()};$('#go').onclick=go;$('#pw').onkeydown=e=>{if(e.key=='Enter')go()}}
-function shell(){clearInterval(timer);const t={home:'Головна',contacts:'Контакти',auto:'Автоматизація',hist:'Історія',set:'Налаштування'};
- $('#app').innerHTML=`<nav>${Object.entries(t).map(([k,v])=>`<button data-t=${k} class="${k==tab?'on':''}">${v}</button>`).join('')}</nav><main id=m></main>`;
- document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;shell()});({home,contacts,auto,hist,set})[tab]()}
-async function home(){const s=await api('status');const A={ok:'Підключено',expired:'Сесія недійсна',pending:'Очікує перевірки',none:'Не підключено'};
- $('#m').innerHTML=`<h2>Головна</h2><div class=row style="align-items:center;gap:24px"><div><small>Наступна літера</small><div class=letter>${s.next_letter}</div></div>
- <button class="b ${s.running?'red':''}" id=t>${s.running?'Зупинити':'Запустити'}</button></div>
- <div class=row><button class=b id=rf>Оновити контакти з TikTok</button><button class=b id=rn>Надіслати літеру зараз</button></div>
+const prof=p=>p?`<div style="display:flex;gap:10px;align-items:center;margin:6px 0">${p.avatar?`<img src="${esc(p.avatar)}" alt="" class="av" style="width:40px;height:40px">`:''}<b>${p.user?'@'+esc(p.user):'Профіль'}</b></div>`:'';
+const hue=n=>{let h=0;for(const c of String(n))h=(h*31+c.codePointAt(0))%360;return h};
+const av=x=>x.has_av?`<img class=av alt="" src="/api/avatar?name=${encodeURIComponent(x.name)}">`:`<span class="av ph" style="--h:${hue(x.name)}">${esc((Array.from(String(x.name).trim())[0]||'?').toUpperCase())}</span>`;
+const profUrl=x=>x.username?`https://www.tiktok.com/@${encodeURIComponent(x.username)}`:`https://www.tiktok.com/search/user?q=${encodeURIComponent(x.name)}`;
+const skel=n=>Array.from({length:n},(_,i)=>`<div class=sk style="animation-delay:${i*90}ms"></div>`).join('');
+
+function paint(html,my){if(my!==nav)return false;const m=$('#m');m.className=entering?'enter':'';m.innerHTML=html;
+ if(entering){entering=false;setTimeout(()=>m.classList.remove('enter'),1000)}return true}
+function countUp(el){const to=+el.dataset.n||0;if(reduce||!to){el.textContent=to;return}const t0=performance.now();
+ const f=t=>{const k=Math.min(1,(t-t0)/800);el.textContent=Math.round(to*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(f)};requestAnimationFrame(f)}
+const num=n=>`<b class=num data-n="${+n||0}">0</b>`;
+
+function login(){nav++;clearInterval(timer);$('#app').innerHTML=`<main><div class="card login" style="animation:rise .7s var(--out) both"><h2>Вхід</h2><div class=row><input id=pw type=password placeholder="Пароль" autofocus autocomplete="current-password" style="flex:1;min-width:0"><button class=b id=go>Увійти</button></div><label class=line style="padding:4px 2px"><span>Показати пароль</span><span class=sw><input type=checkbox id=sp><span></span></span></label></div></main>`;
+ $('#sp').onchange=e=>{$('#pw').type=e.target.checked?'text':'password'};
+ const go=async()=>{await api('login','POST',{password:$('#pw').value});tab='home';shell()};$('#go').onclick=go;$('#pw').onkeydown=e=>{if(e.key=='Enter')go()}}
+
+function movePill(init){const d=$('.dock'),p=$('.pill'),b=d&&d.querySelector('.on');if(!b)return;
+ if(init)p.classList.add('init');p.style.width=b.offsetWidth+'px';p.style.transform=`translateX(${b.offsetLeft}px)`;
+ if(init){void p.offsetWidth;p.classList.remove('init')}}
+function shell(){$('#app').innerHTML=`<main id=m></main><nav class=dock aria-label="Розділи"><span class="pill"></span>${TABS.map(([k,v,i])=>`<button data-t=${k} class="${k==tab?'on':''}" ${k==tab?'aria-current=page':''}>${svg(i)}<span>${v}</span></button>`).join('')}</nav>`;
+ document.querySelectorAll('.dock button').forEach(b=>b.onclick=()=>{if(b.dataset.t!=tab)go(b.dataset.t)});
+ movePill(true);go(tab,true)}
+function go(t,first){tab=t;clearInterval(timer);const my=++nav;entering=true;
+ document.querySelectorAll('.dock button').forEach(b=>{const on=b.dataset.t==t;b.classList.toggle('on',on);on?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current')});
+ movePill(first);scrollTo({top:0,behavior:reduce?'auto':'smooth'});
+ $('#m').className='';$('#m').innerHTML=skel(t=='contacts'?6:4);({home,contacts,auto,hist,set})[t]()}
+addEventListener('resize',()=>movePill(true));
+
+async function home(){const my=nav;const s=await api('status');if(!s)return;const A={ok:'Підключено',expired:'Сесія недійсна',pending:'Очікує перевірки',none:'Не підключено'};
+ if(!paint(`<h2>Головна</h2>
+ <section class="card hero"><div><small>Наступна літера</small><div class=letter>${esc(s.next_letter)}</div></div>
+ <button class="b big ${s.running?'red':''}" id=t>${s.running?'Зупинити':'Запустити'}</button></section>
+ <div class=row><button class="b ghost" id=rf>Оновити контакти з TikTok</button><button class="b ghost" id=rn>Надіслати літеру зараз</button></div>
  ${s.cmd?'<p>⏳ Команда в черзі — воркер виконає її протягом хвилини.</p>':''}
- <div class=grid><div class=card><small>Сервер (worker)</small><b>${s.worker_online?'онлайн':'не відповідає'}</b></div>
+ <div class=grid><div class=card><small>Сервер (worker)</small><b><span class="dot ${s.worker_online?'on':''}"></span>${s.worker_online?'онлайн':'не відповідає'}</b></div>
  <div class=card><small>Автоматизація</small><b>${s.running?'працює':'вимкнена'}</b></div>
  <div class=card><small>Останнє виконання</small><b>${esc(s.last_run?new Date(s.last_run).toLocaleString('uk-UA'):'—')}</b></div>
- <div class=card><small>Контактів / вибрано</small><b>${s.contacts} / ${s.selected}</b></div><div class=card><small>Надіслано літер</small><b>${s.sent}</b></div>
- <div class=card><small>Акаунт</small>${prof(s.profile)}<b>${A[s.auth]}</b></div></div>
- <h3>Що відбувається зараз</h3><div style="overflow-x:auto"><table id=feed></table></div>`;
- $('#t').onclick=async()=>{await api('running','POST',{on:!s.running});home()};
- $('#rf').onclick=async()=>{await api('refresh','POST');home()};
- $('#rn').onclick=async()=>{if(confirm('Надіслати літеру зараз усім вибраним контактам?')){await api('run_now','POST');home()}};
+ <div class=card><small>Контактів</small>${num(s.contacts)}</div><div class=card><small>Вибрано</small>${num(s.selected)}</div><div class=card><small>Надіслано літер</small>${num(s.sent)}</div>
+ <div class=card><small>Акаунт</small>${prof(s.profile)}<b>${A[s.auth]||esc(s.auth)}</b></div></div>
+ <h3>Що відбувається зараз</h3><div class="card tw"><table id=feed></table></div>`,my))return;
+ document.querySelectorAll('.num').forEach(countUp);
+ $('#t').onclick=async()=>{await api('running','POST',{on:!s.running});toast(s.running?'Автоматизацію зупинено':'Автоматизацію запущено');home()};
+ $('#rf').onclick=async()=>{await api('refresh','POST');toast('Команду надіслано');home()};
+ $('#rn').onclick=async()=>{if(confirm('Надіслати літеру зараз усім вибраним контактам?')){await api('run_now','POST');toast('Команду надіслано');home()}};
  const feed=async()=>{const e=$('#feed');if(e)e.innerHTML=HEAD+rows(await api('history?kind=all&limit=30'))};feed();timer=setInterval(feed,5000)}
-async function contacts(q=''){const c=await api('contacts?q='+encodeURIComponent(q));
- $('#m').innerHTML=`<h2>Контакти</h2><p>Позначте галочкою, з ким вести діалоги. Літери та смайлики йдуть лише вибраним.</p>
- <div class=row><button class=b id=rf>Оновити список із TikTok</button><button class=b id=all>Вибрати всіх</button><button class=b id=none>Зняти всіх</button></div>
- <div class=row><input id=nn placeholder="Додати вручну (нік як у чаті)"><button class=b id=add>Додати</button></div>
- <input id=q placeholder="Пошук" value="${esc(q)}"><p>Вибрано: <b>${c.filter(x=>x.enabled).length}</b> із ${c.length}</p>
- <table><tr><th>Користувач<th>Діалог</tr>${c.map((x,i)=>`<tr><td>${av(x)}<a class=nick href="${prof_url(x)}" target=_blank rel="noopener noreferrer" title="${x.username?'Відкрити профіль у TikTok':'Знайти в TikTok'}">${esc(x.name)}</a><td><input type=checkbox data-i=${i} ${x.enabled?'checked':''}></tr>`).join('')||'<tr><td colspan=2>Список порожній. Натисніть «Оновити список із TikTok» і зачекайте хвилину (хід видно на Головній).'}</table>`;
- const bulk=async(e,s)=>{await api('contacts/bulk','POST',{enabled:e,streak_only:s})};
- $('#rf').onclick=async()=>{await api('refresh','POST');alert('Команду надіслано. Оновіть сторінку приблизно за хвилину.')};
- $('#all').onclick=async()=>{await bulk(true,false);contacts(q)};$('#none').onclick=async()=>{await bulk(false,false);contacts(q)};
 
- $('#add').onclick=async()=>{await api('contacts/add','POST',{name:$('#nn').value});contacts(q)};
- $('#q').onchange=e=>contacts(e.target.value);
- document.querySelectorAll('[data-i]').forEach(b=>b.onchange=async()=>{await api('contacts/toggle','POST',{name:c[b.dataset.i].name,enabled:b.checked});contacts(q)})}
-async function auto(){const s=await api('settings');const rc=(await api('contacts')).filter(x=>x.enabled);
- $('#m').innerHTML=`<h2>Автоматизація</h2><label><input type=checkbox id=daily ${s.daily_on=='1'?'checked':''}>Щоденне надсилання літер</label>
- <div class=card style="margin:12px 0"><b>Отримувачі</b><p>Літери та смайлики надсилаються <b>лише вибраним</b> контактам. Вибрано: ${rc.length}.${rc.length?'':' Нікому нічого не буде надіслано — оберіть людей у «Контактах».'}</p><div class=row>${rc.map(x=>`<span class=chip>${av(x)}${esc(x.name)}</span>`).join('')}</div><button class=b id=chg>Змінити вибір</button></div>
- <label><input type=checkbox id=video ${s.video_on=='1'?'checked':''}>Відповідати на відео (вибраним)</label>
- <label>Смайлик <input id=emoji value="${esc(s.emoji)}" size=4></label><label>Час надсилання <input id=time type=time value="${s.send_time}"></label>
- <label>Часовий пояс <input id=tz value="${esc(s.tz)}"></label><button class=b id=save>Зберегти</button>`;
- $('#chg').onclick=()=>{tab='contacts';shell()};$('#save').onclick=async()=>{await api('settings','PUT',{daily_on:$('#daily').checked?'1':'0',video_on:$('#video').checked?'1':'0',emoji:$('#emoji').value,send_time:$('#time').value,tz:$('#tz').value});alert('Збережено')}}
-async function hist(k='all'){const h=await api('history?kind='+k+'&limit=200');
- $('#m').innerHTML=`<h2>Історія</h2><div class=row><select id=k><option value=all ${k=='all'?'selected':''}>Усі дії</option><option value=letter ${k=='letter'?'selected':''}>Автоповідомлення</option><option value=video ${k=='video'?'selected':''}>Відео та відповіді</option></select></div>
- <div style="overflow-x:auto"><table>${HEAD}${rows(h)}</table></div>`;$('#k').onchange=e=>hist(e.target.value)}
-async function set(){const s=await api('status');
- $('#m').innerHTML=`<h2>Налаштування</h2><p>Статус акаунта: <b>${s.auth}</b></p>${s.profile?`<div class=card style="margin-bottom:12px"><small>Підключено як</small>${prof(s.profile)}</div>`:''}<p>Вставте JSON cookies tiktok.com (див. README, розділ 4):</p><textarea id=ck></textarea>
- <div class=row><button class=b id=ck2>Перевірити підключення</button><button class=b id=sv>Підключити акаунт</button><button class="b red" id=del>Відключити акаунт</button><button class=b id=out>Вийти з панелі</button></div><h3>Діагностика</h3><p>Показує, що бачив воркер при останній невдалій спробі.</p><button class=b id=dg>Показати, що бачив воркер</button><div id=dgo></div>`;
- $('#dg').onclick=async()=>{const d=await api('debug');$('#dgo').innerHTML=d.info?`<p style="word-break:break-all">${esc(d.info.url)}<br>${esc(d.info.title)}</p><p style="word-break:break-all">data-e2e: ${esc((d.info.e2e||[]).join(', '))}</p>${d.shot?`<img src="data:image/jpeg;base64,${d.shot}" alt="" style="max-width:100%;border:1px solid var(--line)">`:''}`:'<p>Даних поки немає. Натисніть «Оновити контакти» і спробуйте ще раз.</p>'};$('#ck2').onclick=async()=>{await api('check','POST');alert('Перевірку запущено. Оновіть сторінку за хвилину.')};$('#sv').onclick=async()=>{await api('cookies','POST',{cookies:$('#ck').value});alert('Збережено (зашифровано)');set()};
+async function contacts(){const my=nav;const c=await api('contacts');if(!c)return;
+ const row=(x,i)=>`<div class="crow${x.enabled?' on':''}" style="--i:${Math.min(i,14)}">${av(x)}<div class=cb><a class=nick href="${esc(profUrl(x))}" target=_blank rel="noopener noreferrer" title="${x.username?'Відкрити профіль у TikTok':'Знайти в TikTok'}">${esc(x.name)}</a><small>${x.streak?'🔥 серія · ':''}${x.username?'@'+esc(x.username):'профіль: пошук у TikTok'}</small></div><label class=sw><input type=checkbox data-i=${i} ${x.enabled?'checked':''} aria-label="Діалог з ${esc(x.name)}"><span></span></label></div>`;
+ if(!paint(`<h2>Контакти</h2><p>Позначте, з ким вести діалоги. Літери та смайлики йдуть лише вибраним. Натисніть на нік — відкриється профіль у TikTok.</p>
+ <div class=row><button class="b ghost" id=rf>Оновити список із TikTok</button><button class="b ghost" id=all>Вибрати всіх</button><button class="b ghost" id=none>Зняти всіх</button></div>
+ <div class=row><input id=nn placeholder="Додати вручну (нік)" style="flex:1;min-width:180px"><button class="b ghost" id=add>Додати</button></div>
+ <label class=search>${svg('search')}<input id=q type=search placeholder="Пошук за ніком" autocomplete=off></label>
+ <p class=count>Вибрано <b id=cnt></b> із ${c.length}</p><div id=list class=clist></div>`,my))return;
+ const list=$('#list');const cnt=()=>{$('#cnt').textContent=c.filter(x=>x.enabled).length};
+ const draw=still=>{const t=$('#q').value.trim().toLowerCase();list.className='clist'+(still?' still':'');
+  list.innerHTML=c.map((x,i)=>[x,i]).filter(([x])=>!t||x.name.toLowerCase().includes(t)||(x.username||'').toLowerCase().includes(t)).map(([x,i])=>row(x,i)).join('')
+   ||`<div class=empty>${c.length?'Нічого не знайдено':'Список порожній. Натисніть «Оновити список із TikTok» і зачекайте хвилину (хід видно на Головній).'}</div>`};
+ draw(false);cnt();
+ list.onchange=async e=>{const b=e.target;if(b.dataset.i===undefined)return;const x=c[b.dataset.i];
+  try{await api('contacts/toggle','POST',{name:x.name,enabled:b.checked});x.enabled=b.checked;b.closest('.crow').classList.toggle('on',b.checked);cnt()}catch(_){b.checked=!b.checked}};
+ const bulk=async v=>{await api('contacts/bulk','POST',{enabled:v,streak_only:false});c.forEach(x=>x.enabled=v);draw(true);cnt()};
+ $('#rf').onclick=async()=>{await api('refresh','POST');toast('Команду надіслано. Оновіть сторінку приблизно за хвилину')};
+ $('#all').onclick=()=>bulk(true);$('#none').onclick=()=>bulk(false);
+ $('#add').onclick=async()=>{await api('contacts/add','POST',{name:$('#nn').value});toast('Додано');contacts()};
+ $('#q').oninput=()=>draw(true)}
+
+async function auto(){const my=nav;const [s,st]=await Promise.all([api('settings'),api('status')]);if(!s||!st)return;const rc=(await api('contacts')).filter(x=>x.enabled);
+ if(!paint(`<h2>Автоматизація</h2>
+ <section class="card hero"><div><small>Стан</small><b style="font-size:1.4rem"><span class="dot ${st.running?'on':''}"></span>${st.running?'Працює':'Вимкнена'}</b><p style="margin:.3em 0 0">${st.running?'Літери та відповіді на відео виконуються.':'Нічого не надсилається, поки не запустите.'}</p></div>
+ <button class="b big ${st.running?'red':''}" id=run>${st.running?'Зупинити автоматизацію':'Запустити автоматизацію'}</button></section>
+ <div class=card style="margin-top:14px"><label class=line><span>Щоденне надсилання літер</span><span class=sw><input type=checkbox id=daily ${s.daily_on=='1'?'checked':''}><span></span></span></label>
+ <div class=line style="cursor:default"><span>Відповідати на відеоролики<br><small>завжди увімкнено (вибраним контактам)</small></span><span class=sta>завжди</span></div></div>
+ <div class=card style="margin:14px 0"><b>Отримувачі</b><p>Літери та смайлики надсилаються <b>лише вибраним</b> контактам. Вибрано: ${rc.length}.${rc.length?'':' Нікому нічого не буде надіслано — оберіть людей у «Контактах».'}</p><div class=row>${rc.map(x=>`<span class=chip>${av(x)}${esc(x.name)}</span>`).join('')}</div><button class="b ghost" id=chg>Змінити вибір</button></div>
+ <div class=card><div class=row style="margin:0 0 14px"><label>Смайлик<br><input id=emoji value="${esc(s.emoji)}" size=4></label><label>Час надсилання<br><input id=time type=time value="${esc(s.send_time)}"></label><label>Часовий пояс<br><input id=tz value="${esc(s.tz)}"></label></div>
+ <button class=b id=save>Зберегти</button></div>`,my))return;
+ $('#run').onclick=async()=>{await api('running','POST',{on:!st.running});toast(st.running?'Автоматизацію зупинено':'Автоматизацію запущено');auto()};
+ $('#chg').onclick=()=>go('contacts');
+ $('#save').onclick=async()=>{await api('settings','PUT',{daily_on:$('#daily').checked?'1':'0',emoji:$('#emoji').value,send_time:$('#time').value,tz:$('#tz').value});toast('Збережено')}}
+
+async function hist(k='all'){const my=nav;const h=await api('history?kind='+k+'&limit=200');if(!h)return;
+ if(!paint(`<h2>Історія</h2><div class=row><select id=k><option value=all ${k=='all'?'selected':''}>Усі дії</option><option value=letter ${k=='letter'?'selected':''}>Автоповідомлення</option><option value=video ${k=='video'?'selected':''}>Відео та відповіді</option></select></div>
+ <div class="card tw"><table>${HEAD}${rows(h)}</table></div>`,my))return;
+ $('#k').onchange=e=>hist(e.target.value)}
+
+async function set(){const my=nav;const s=await api('status');if(!s)return;
+ if(!paint(`<h2>Налаштування</h2><div class=card><small>Статус акаунта</small><b>${esc(s.auth)}</b>${s.profile?`<small style="margin-top:10px">Підключено як</small>${prof(s.profile)}`:''}</div>
+ <h3>Cookies tiktok.com</h3><p>Вставте JSON cookies (див. README, розділ 4):</p><textarea id=ck></textarea>
+ <div class=row><button class="b ghost" id=ck2>Перевірити підключення</button><button class=b id=sv>Підключити акаунт</button><button class="b red" id=del>Відключити акаунт</button><button class="b ghost" id=out>Вийти з панелі</button></div>
+ <h3>Діагностика</h3><p>Показує, що бачив воркер при останній невдалій спробі.</p><button class="b ghost" id=dg>Показати, що бачив воркер</button><div id=dgo></div>`,my))return;
+ $('#dg').onclick=async()=>{const d=await api('debug');$('#dgo').innerHTML=d.info?`<div class=card style="margin-top:12px"><p style="word-break:break-all">${esc(d.info.url)}<br>${esc(d.info.title)}</p><p style="word-break:break-all">data-e2e: ${esc((d.info.e2e||[]).join(', '))}</p>${d.shot?`<img src="data:image/jpeg;base64,${esc(d.shot)}" alt="" style="max-width:100%;border-radius:12px;border:1px solid var(--line)">`:''}</div>`:'<p>Даних поки немає. Натисніть «Оновити контакти» і спробуйте ще раз.</p>'};
+ $('#ck2').onclick=async()=>{await api('check','POST');toast('Перевірку запущено. Оновіть сторінку за хвилину')};
+ $('#sv').onclick=async()=>{await api('cookies','POST',{cookies:$('#ck').value});toast('Збережено (зашифровано)');set()};
  $('#del').onclick=async()=>{await api('cookies','DELETE');set()};$('#out').onclick=async()=>{await api('logout','POST');login()}}
-api('me').then(r=>r.ok?shell():login());
+
+api('me').then(r=>r&&r.ok?shell():login());
 </script></body></html>

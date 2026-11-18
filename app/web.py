@@ -12,7 +12,7 @@ app.on_event("startup")(db.init)
 def auth(r: Request):
     if not r.session.get("ok"): raise HTTPException(401)
 D = [Depends(auth)]
-KEYS = {"streak_only", "daily_on", "video_on", "emoji", "send_time", "tz"}
+KEYS = {"streak_only", "daily_on", "emoji", "send_time", "tz"}
 
 @app.get("/health")
 def health(): return {"ok": True}
