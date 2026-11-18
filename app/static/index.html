@@ -26,7 +26,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const KIND={info:'Інфо',letter:'Літера',video_in:'Отримано відео',video_reply:'Відповідь на відео',worker:'Помилка роботи'};
 const rows=h=>h.map(x=>`<tr><td>${x.ts}<td>${esc(x.contact)}<td>${KIND[x.kind]||x.kind}: ${esc(x.detail)}<td class="${x.status=='ok'?'':'err'}">${esc(x.status)}</tr>`).join('')||'<tr><td colspan=4>Подій ще немає</tr>';
 const HEAD='<tr><th>Час<th>Контакт<th>Дія<th>Статус</tr>';
-function login(){$('#app').innerHTML=`<main><h2>Вхід</h2><div class=row><input id=pw type=password placeholder="Пароль" autofocus><button class=b id=go>Увійти</button></div></main>`;
+function login(){$('#app').innerHTML=`<main><h2>Вхід</h2><div class=row><input id=pw type=password placeholder="Пароль" autofocus autocomplete="current-password"><button class=b id=go>Увійти</button></div><label><input type=checkbox id=sp>Показати пароль</label></main>`;$('#sp').onchange=e=>{$('#pw').type=e.target.checked?'text':'password'};
  const go=async()=>{await api('login','POST',{password:$('#pw').value});shell()};$('#go').onclick=go;$('#pw').onkeydown=e=>e.key=='Enter'&&go()}
 function shell(){clearInterval(timer);const t={home:'Головна',contacts:'Контакти',auto:'Автоматизація',hist:'Історія',set:'Налаштування'};
  $('#app').innerHTML=`<nav>${Object.entries(t).map(([k,v])=>`<button data-t=${k} class="${k==tab?'on':''}">${v}</button>`).join('')}</nav><main id=m></main>`;
