@@ -19,40 +19,58 @@ td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;font-s
 textarea{width:100%;height:120px;font:13px monospace;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px}
 :focus-visible{outline:3px solid var(--acc);outline-offset:2px}.row{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
 </style></head><body><div id="app"></div><script>
-const $=s=>document.querySelector(s);let tab='home';
+const $=s=>document.querySelector(s);let tab='home',timer;
 const api=async(u,m='GET',b)=>{const r=await fetch('/api/'+u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});
  if(r.status==401&&u!='login'){return login()} if(!r.ok){alert((await r.json()).detail||'Помилка');throw 0} return r.json()};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const KIND={info:'Інфо',letter:'Літера',video_in:'Отримано відео',video_reply:'Відповідь на відео',worker:'Помилка роботи'};
+const rows=h=>h.map(x=>`<tr><td>${x.ts}<td>${esc(x.contact)}<td>${KIND[x.kind]||x.kind}: ${esc(x.detail)}<td class="${x.status=='ok'?'':'err'}">${esc(x.status)}</tr>`).join('')||'<tr><td colspan=4>Подій ще немає</tr>';
+const HEAD='<tr><th>Час<th>Контакт<th>Дія<th>Статус</tr>';
 function login(){$('#app').innerHTML=`<main><h2>Вхід</h2><div class=row><input id=pw type=password placeholder="Пароль" autofocus><button class=b id=go>Увійти</button></div></main>`;
  const go=async()=>{await api('login','POST',{password:$('#pw').value});shell()};$('#go').onclick=go;$('#pw').onkeydown=e=>e.key=='Enter'&&go()}
-function shell(){const t={home:'Головна',contacts:'Контакти',auto:'Автоматизація',hist:'Історія',set:'Налаштування'};
+function shell(){clearInterval(timer);const t={home:'Головна',contacts:'Контакти',auto:'Автоматизація',hist:'Історія',set:'Налаштування'};
  $('#app').innerHTML=`<nav>${Object.entries(t).map(([k,v])=>`<button data-t=${k} class="${k==tab?'on':''}">${v}</button>`).join('')}</nav><main id=m></main>`;
  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;shell()});({home,contacts,auto,hist,set})[tab]()}
 async function home(){const s=await api('status');const A={ok:'Підключено',expired:'Сесія недійсна',pending:'Очікує перевірки',none:'Не підключено'};
  $('#m').innerHTML=`<h2>Головна</h2><div class=row style="align-items:center;gap:24px"><div><small>Наступна літера</small><div class=letter>${s.next_letter}</div></div>
- <button class="b ${s.running?'red':''}" id=t>${s.running?'Зупинити':'Запустити'}</button></div><div class=grid>
- <div class=card><small>Сервер (worker)</small><b>${s.worker_online?'онлайн':'не відповідає'}</b></div>
+ <button class="b ${s.running?'red':''}" id=t>${s.running?'Зупинити':'Запустити'}</button></div>
+ <div class=row><button class=b id=rf>Оновити контакти з TikTok</button><button class=b id=rn>Надіслати літеру зараз</button></div>
+ ${s.cmd?'<p>⏳ Команда в черзі — воркер виконає її протягом хвилини.</p>':''}
+ <div class=grid><div class=card><small>Сервер (worker)</small><b>${s.worker_online?'онлайн':'не відповідає'}</b></div>
  <div class=card><small>Автоматизація</small><b>${s.running?'працює':'вимкнена'}</b></div>
  <div class=card><small>Останнє виконання</small><b>${esc(s.last_run?new Date(s.last_run).toLocaleString('uk-UA'):'—')}</b></div>
- <div class=card><small>Контактів</small><b>${s.contacts}</b></div><div class=card><small>Надіслано літер</small><b>${s.sent}</b></div>
- <div class=card><small>Акаунт</small><b>${A[s.auth]}</b></div></div>`;
- $('#t').onclick=async()=>{await api('running','POST',{on:!s.running});home()}}
+ <div class=card><small>Контактів / вибрано</small><b>${s.contacts} / ${s.selected}</b></div><div class=card><small>Надіслано літер</small><b>${s.sent}</b></div>
+ <div class=card><small>Акаунт</small><b>${A[s.auth]}</b></div></div>
+ <h3>Що відбувається зараз</h3><div style="overflow-x:auto"><table id=feed></table></div>`;
+ $('#t').onclick=async()=>{await api('running','POST',{on:!s.running});home()};
+ $('#rf').onclick=async()=>{await api('refresh','POST');home()};
+ $('#rn').onclick=async()=>{if(confirm('Надіслати літеру зараз усім вибраним контактам?')){await api('run_now','POST');home()}};
+ const feed=async()=>{const e=$('#feed');if(e)e.innerHTML=HEAD+rows(await api('history?kind=all&limit=30'))};feed();timer=setInterval(feed,5000)}
 async function contacts(q=''){const c=await api('contacts?q='+encodeURIComponent(q));
- $('#m').innerHTML=`<h2>Контакти</h2><input id=q placeholder="Пошук" value="${esc(q)}"><table><tr><th>Ім'я<th>Вогник<th>Авто</tr>
- ${c.map((x,i)=>`<tr><td>${esc(x.name)}<td>${x.streak?'🔥 активний':'—'}<td><input type=checkbox data-i=${i} ${x.enabled?'checked':''}></tr>`).join('')||'<tr><td colspan=3>Контактів немає. Запустіть автоматизацію — список збереться з TikTok.'}</table>`;
- $('#q').onchange=e=>contacts(e.target.value);document.querySelectorAll('[data-i]').forEach(b=>b.onchange=()=>api('contacts/toggle','POST',{name:c[b.dataset.i].name,enabled:b.checked}))}
+ $('#m').innerHTML=`<h2>Контакти</h2><p>Позначте галочкою, з ким вести діалоги. Літери та смайлики йдуть лише вибраним.</p>
+ <div class=row><button class=b id=rf>Оновити список із TikTok</button><button class=b id=all>Вибрати всіх</button><button class=b id=none>Зняти всіх</button><button class=b id=st>Вибрати лише з вогником</button></div>
+ <div class=row><input id=nn placeholder="Додати вручну (нік як у чаті)"><button class=b id=add>Додати</button></div>
+ <input id=q placeholder="Пошук" value="${esc(q)}"><p>Вибрано: <b>${c.filter(x=>x.enabled).length}</b> із ${c.length}</p>
+ <table><tr><th>Ім'я<th>Вогник<th>Діалог</tr>${c.map((x,i)=>`<tr><td>${esc(x.name)}<td>${x.streak?'🔥 активний':'—'}<td><input type=checkbox data-i=${i} ${x.enabled?'checked':''}></tr>`).join('')||'<tr><td colspan=3>Список порожній. Натисніть «Оновити список із TikTok» і зачекайте хвилину (хід видно на Головній).'}</table>`;
+ const bulk=async(e,s)=>{await api('contacts/bulk','POST',{enabled:e,streak_only:s})};
+ $('#rf').onclick=async()=>{await api('refresh','POST');alert('Команду надіслано. Оновіть сторінку приблизно за хвилину.')};
+ $('#all').onclick=async()=>{await bulk(true,false);contacts(q)};$('#none').onclick=async()=>{await bulk(false,false);contacts(q)};
+ $('#st').onclick=async()=>{await bulk(false,false);await bulk(true,true);contacts(q)};
+ $('#add').onclick=async()=>{await api('contacts/add','POST',{name:$('#nn').value});contacts(q)};
+ $('#q').onchange=e=>contacts(e.target.value);
+ document.querySelectorAll('[data-i]').forEach(b=>b.onchange=async()=>{await api('contacts/toggle','POST',{name:c[b.dataset.i].name,enabled:b.checked});contacts(q)})}
 async function auto(){const s=await api('settings');
  $('#m').innerHTML=`<h2>Автоматизація</h2><label><input type=checkbox id=daily ${s.daily_on=='1'?'checked':''}>Щоденне надсилання літер</label>
- <label><input type=checkbox id=video ${s.video_on=='1'?'checked':''}>Відповідати на відео</label>
+ <label><input type=checkbox id=so ${s.streak_only=='1'?'checked':''}>Серед вибраних — лише тим, у кого активний вогник</label>
+ <label><input type=checkbox id=video ${s.video_on=='1'?'checked':''}>Відповідати на відео (вибраним)</label>
  <label>Смайлик <input id=emoji value="${esc(s.emoji)}" size=4></label><label>Час надсилання <input id=time type=time value="${s.send_time}"></label>
  <label>Часовий пояс <input id=tz value="${esc(s.tz)}"></label><button class=b id=save>Зберегти</button>`;
- $('#save').onclick=async()=>{await api('settings','PUT',{daily_on:$('#daily').checked?'1':'0',video_on:$('#video').checked?'1':'0',emoji:$('#emoji').value,send_time:$('#time').value,tz:$('#tz').value});alert('Збережено')}}
-async function hist(k='letter'){const h=await api('history?kind='+k);
- $('#m').innerHTML=`<h2>Історія</h2><div class=row><select id=k><option value=letter ${k=='letter'?'selected':''}>Автоповідомлення</option><option value=video ${k=='video'?'selected':''}>Відео та відповіді</option></select></div>
- <div style="overflow-x:auto"><table><tr><th>Час<th>Контакт<th>Дія<th>Статус</tr>${h.map(x=>`<tr><td>${x.ts}<td>${esc(x.contact)}<td>${esc(x.kind)}: ${esc(x.detail)}<td class="${x.status=='ok'?'':'err'}">${esc(x.status)}</tr>`).join('')}</table></div>`;
- $('#k').onchange=e=>hist(e.target.value)}
+ $('#save').onclick=async()=>{await api('settings','PUT',{daily_on:$('#daily').checked?'1':'0',streak_only:$('#so').checked?'1':'0',video_on:$('#video').checked?'1':'0',emoji:$('#emoji').value,send_time:$('#time').value,tz:$('#tz').value});alert('Збережено')}}
+async function hist(k='all'){const h=await api('history?kind='+k+'&limit=200');
+ $('#m').innerHTML=`<h2>Історія</h2><div class=row><select id=k><option value=all ${k=='all'?'selected':''}>Усі дії</option><option value=letter ${k=='letter'?'selected':''}>Автоповідомлення</option><option value=video ${k=='video'?'selected':''}>Відео та відповіді</option></select></div>
+ <div style="overflow-x:auto"><table>${HEAD}${rows(h)}</table></div>`;$('#k').onchange=e=>hist(e.target.value)}
 async function set(){const s=await api('status');
- $('#m').innerHTML=`<h2>Налаштування</h2><p>Статус: <b>${s.auth}</b></p><p>Вставте JSON cookies tiktok.com (див. README, розділ 4):</p><textarea id=ck></textarea>
+ $('#m').innerHTML=`<h2>Налаштування</h2><p>Статус акаунта: <b>${s.auth}</b></p><p>Вставте JSON cookies tiktok.com (див. README, розділ 4):</p><textarea id=ck></textarea>
  <div class=row><button class=b id=sv>Підключити акаунт</button><button class="b red" id=del>Відключити акаунт</button><button class=b id=out>Вийти з панелі</button></div>`;
  $('#sv').onclick=async()=>{await api('cookies','POST',{cookies:$('#ck').value});alert('Збережено (зашифровано)');set()};
  $('#del').onclick=async()=>{await api('cookies','DELETE');set()};$('#out').onclick=async()=>{await api('logout','POST');login()}}

@@ -22,7 +22,7 @@ def open_page(p):
     pg = ctx.new_page(); pg.goto("https://www.tiktok.com/messages", wait_until="domcontentloaded")
     try: pg.wait_for_selector(SEL["item"], timeout=30000)
     except Exception: b.close(); db.put("auth", "expired"); raise RuntimeError("Сесія TikTok недійсна або потрібна капча")
-    db.put("auth", "ok"); return b, pg
+    db.put("auth", "ok"); db.log("info", None, "TikTok відкрито, сесія активна"); return b, pg
 
 def scan(pg):
     out = []
@@ -49,14 +49,22 @@ def chat_videos(pg):  # лише ВХІДНІ відео (повідомленн
         if mid and bb and bb["x"] + bb["width"] / 2 < 640: out.append(mid.group(1))
     return out
 
-def daily(pg, today):
-    idx = int(db.get("alpha_idx")) % len(ALPHABET); letter = ALPHABET[idx]
+def sync_contacts(pg):
+    found = scan(pg)
     with db.cur() as k:
         k.execute("update contacts set streak=false")
-        for n, s in scan(pg):
-            k.execute("insert into contacts(name,streak) values(%s,%s) on conflict(name) do update "
+        for n, s in found:
+            k.execute("insert into contacts(name,streak,enabled) values(%s,%s,false) on conflict(name) do update "
                       "set streak=excluded.streak, seen_at=now()", (n, s))
-        k.execute("select name from contacts where streak and enabled"); names = [r["name"] for r in k.fetchall()]
+    db.log("info", None, f"Знайдено чатів: {len(found)}, з вогником: {sum(1 for _, s in found if s)}")
+
+def daily(pg, today):
+    idx = int(db.get("alpha_idx")) % len(ALPHABET); letter = ALPHABET[idx]
+    sync_contacts(pg)
+    with db.cur() as k:
+        k.execute("select name from contacts where enabled and (streak or %s='0')", (db.get("streak_only"),))
+        names = [r["name"] for r in k.fetchall()]
+    db.log("info", None, f"Літера «{letter}»: вибрано для надсилання {len(names)}")
     for n in names:
         with db.cur() as k:
             k.execute("insert into sent values(%s,%s) on conflict do nothing", (today, n)); fresh = k.rowcount == 1
@@ -68,20 +76,21 @@ def daily(pg, today):
     db.put("alpha_idx", (idx + 1) % len(ALPHABET))
 
 def videos(pg):
-    emoji = db.get("emoji")
+    emoji = db.get("emoji"); chats = 0; newv = 0
     with db.cur() as k:
-        k.execute("select name from contacts where not enabled"); off = {r["name"] for r in k.fetchall()}
+        k.execute("select name from contacts where enabled"); on = {r["name"] for r in k.fetchall()}
     for n, _ in scan(pg):
-        if n in off or not open_chat(pg, n): continue
-        ids = chat_videos(pg)
+        if n not in on or not open_chat(pg, n): continue
+        ids = chat_videos(pg); chats += 1
         with db.cur() as k:
             k.execute("insert into seen_videos values(%s,'__base__') on conflict do nothing", (n,)); base = k.rowcount == 1
             for v in ids:
                 k.execute("insert into seen_videos values(%s,%s) on conflict do nothing", (n, v))
                 if k.rowcount == 1 and not base:  # першу появу чату лише запам'ятовуємо
-                    db.log("video_in", n, v)
+                    db.log("video_in", n, v); newv += 1
                     try: send(pg, emoji); db.log("video_reply", n, emoji)
                     except Exception as e: db.log("video_reply", n, emoji, "error: " + str(e)[:200])
+    if newv: db.log("info", None, f"Перевірено чатів: {chats}, нових відео: {newv}")
 
 def tick():
     global _last_video
@@ -109,10 +118,25 @@ def tick():
         if due: db.put("last_day", "")  # повторимо; sent-таблиця не дасть дублів
         raise
 
+def run_cmd():
+    cmd = db.get("cmd")
+    if not cmd: return False
+    db.put("cmd", ""); db.log("info", None, "Команда з панелі: " + cmd)
+    now = dt.datetime.now(ZoneInfo(db.get("tz")))
+    with sync_playwright() as p:
+        b, pg = open_page(p)
+        try:
+            if cmd == "refresh": sync_contacts(pg)
+            elif cmd == "run_now":
+                daily(pg, now.date().isoformat()); db.put("last_day", now.date().isoformat()); db.put("last_run", now.isoformat())
+        finally: b.close()
+    return True
+
 def main():
     db.init()
     while True:
-        try: tick()
+        try:
+            if not run_cmd(): tick()
         except Exception as e: db.log("worker", None, str(e)[:300], "error")
         db.put("heartbeat", time.time()); time.sleep(60)
 

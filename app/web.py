@@ -12,7 +12,7 @@ app.on_event("startup")(db.init)
 def auth(r: Request):
     if not r.session.get("ok"): raise HTTPException(401)
 D = [Depends(auth)]
-KEYS = {"daily_on", "video_on", "emoji", "send_time", "tz"}
+KEYS = {"streak_only", "daily_on", "video_on", "emoji", "send_time", "tz"}
 
 @app.get("/health")
 def health(): return {"ok": True}
@@ -35,9 +35,10 @@ def status():
     with db.cur() as k:
         k.execute("select count(*) c from contacts"); c = k.fetchone()["c"]
         k.execute("select count(*) c from log where kind='letter' and status='ok'"); s = k.fetchone()["c"]
+        k.execute("select count(*) c from contacts where enabled"); sel = k.fetchone()["c"]
     hb = float(db.get("heartbeat") or 0); i = int(db.get("alpha_idx"))
     from .worker import ALPHABET
-    return {"worker_online": time.time() - hb < 180, "running": db.get("running") == "1",
+    return {"cmd": db.get("cmd"), "selected": sel, "worker_online": time.time() - hb < 180, "running": db.get("running") == "1",
             "last_run": db.get("last_run"), "next_letter": ALPHABET[i % 33], "contacts": c, "sent": s,
             "auth": db.get("auth") or ("ok" if db.get("cookies") else "none")}
 @app.post("/api/running", dependencies=D)
@@ -68,11 +69,11 @@ async def toggle(r: Request):
     return {"ok": True}
 
 @app.get("/api/history", dependencies=D)
-def history(kind: str = "letter"):
-    kinds = ("video_in", "video_reply") if kind == "video" else ("letter", "worker")
+def history(kind: str = "all", limit: int = 200):
+    kinds = {"letter": ["letter"], "video": ["video_in", "video_reply"]}.get(kind)
     with db.cur() as k:
-        k.execute("select to_char(ts at time zone 'Europe/Kyiv','DD.MM.YYYY HH24:MI:SS') ts,kind,contact,detail,status "
-                  "from log where kind=any(%s) order by id desc limit 200", (list(kinds),))
+        k.execute("select to_char(ts at time zone 'Europe/Kyiv','DD.MM.YYYY HH24:MI:SS') ts,kind,contact,detail,status from log "
+                  "where (%s::text[] is null or kind=any(%s)) order by id desc limit %s", (kinds, kinds, min(limit, 500)))
         return k.fetchall()
 
 @app.post("/api/cookies", dependencies=D)
@@ -90,3 +91,20 @@ async def set_cookies(r: Request):
 def del_cookies():
     with db.cur() as k: k.execute("delete from settings where key in ('cookies','auth')")
     db.put("running", "0"); return {"ok": True}
+
+@app.post("/api/contacts/bulk", dependencies=D)
+async def bulk(r: Request):
+    d = await r.json()
+    with db.cur() as k:
+        k.execute("update contacts set enabled=%s where streak or not %s", (bool(d["enabled"]), bool(d.get("streak_only"))))
+    return {"ok": True}
+@app.post("/api/contacts/add", dependencies=D)
+async def add(r: Request):
+    n = ((await r.json()).get("name") or "").strip()
+    if not n: raise HTTPException(400, "Введіть ім'я")
+    with db.cur() as k: k.execute("insert into contacts(name,enabled) values(%s,true) on conflict do nothing", (n,))
+    return {"ok": True}
+@app.post("/api/refresh", dependencies=D)
+def refresh(): db.put("cmd", "refresh"); return {"ok": True}
+@app.post("/api/run_now", dependencies=D)
+def run_now(): db.put("cmd", "run_now"); return {"ok": True}

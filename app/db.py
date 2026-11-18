@@ -1,7 +1,7 @@
 import os, psycopg2, psycopg2.extras
 from contextlib import contextmanager
 DEFAULTS = {"daily_on": "1", "video_on": "1", "emoji": "🙂", "send_time": "00:01",
-            "tz": "Europe/Kyiv", "running": "0", "alpha_idx": "0", "last_day": ""}
+            "tz": "Europe/Kyiv", "running": "0", "alpha_idx": "0", "last_day": "", "streak_only": "0", "cmd": ""}
 SCHEMA = """
 create table if not exists settings(key text primary key, value text);
 create table if not exists contacts(name text primary key, streak bool default false,
